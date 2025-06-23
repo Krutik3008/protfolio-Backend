@@ -22,17 +22,17 @@ console.log('Environment Variables:', {
     EMAIL_PASS: process.env.EMAIL_PASS ? '[REDACTED]' : undefined,
 });
 
+// Check for missing env variables
 if (!process.env.MONGO_URI) {
     console.error('Error: MONGO_URI is not defined in .env file');
     process.exit(1);
 }
-
 if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
     console.error('Error: EMAIL_USER and EMAIL_PASS must be defined in .env file');
     process.exit(1);
 }
 
-// Set up Nodemailer transporter with Gmail SMTP settings
+// Nodemailer transporter config
 const transporter = nodemailer.createTransport({
     host: 'smtp.gmail.com',
     port: 587,
@@ -42,12 +42,11 @@ const transporter = nodemailer.createTransport({
         pass: process.env.EMAIL_PASS,
     },
     tls: {
-        // Ignore self-signed certificate issues (not recommended for production)
-        rejectUnauthorized: false,
+        rejectUnauthorized: false, // Avoid TLS issues (disable in production)
     },
 });
 
-// Verify email transporter
+// Verify transporter connection
 transporter.verify((error, success) => {
     if (error) {
         console.error('Email Transporter Error:', error);
@@ -58,24 +57,36 @@ transporter.verify((error, success) => {
 
 const app = express();
 
-// Configure CORS
+// ✅ CORS configuration to allow both local and deployed frontend
+const allowedOrigins = [
+    'http://localhost:5173',
+    'https://krutikpatel.vercel.app'
+];
+
 app.use(cors({
-    origin: 'http://localhost:5173',
+    origin: function (origin, callback) {
+        if (!origin || allowedOrigins.includes(origin)) {
+            callback(null, true);
+        } else {
+            callback(new Error('Not allowed by CORS'));
+        }
+    },
     methods: ['GET', 'POST'],
     credentials: true,
 }));
 
 app.use(express.json());
 
-// Pass transporter to routes
+// Inject transporter into requests
 app.use('/api/contact', (req, res, next) => {
     req.transporter = transporter;
     next();
 }, contactRoutes);
 
+// Set the port from .env or default
 const PORT = process.env.PORT || 5000;
 
-// Remove deprecated options
+// Connect to MongoDB and start the server
 mongoose.connect(process.env.MONGO_URI)
     .then(() => {
         console.log('Connected to MongoDB');
